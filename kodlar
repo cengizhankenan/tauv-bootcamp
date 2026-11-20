@@ -1,0 +1,18 @@
+import math
+
+alt_sinir=int(input("Alt sınır gir:"))
+ust_sinir=int(input("Üst sınır gir:"))
+deger=int(input("Sayı gir:"))
+def clamp(deger,alt_sinir,ust_sinir):
+    return max(alt_sinir,min(deger, ust_sinir))
+print(clamp(deger,alt_sinir,ust_sinir))
+def distance(x1,x2,y1,y2):
+    dx=x2-x1
+    dy=y2-y1
+    return sqrt(dx^2+dy^2)
+def bearing(x1,x2,y1,y2):
+    return math.atan2(y2 -y1, x2 - x1 )
+def wrap_angle(angle):
+    return math.atan2(math.sin(angle),math.cos(angle))
+def heading_error(hedef_yon,mevcut_yon):
+    return wrap_angle(hedef_yon-mevcut_yon)
