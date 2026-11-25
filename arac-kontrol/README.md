@@ -8,8 +8,14 @@ ArduSub aracını MAVLink (pymavlink) üzerinden süren `Arac` class'ı: [arac.p
 | `heartbeat_gonder()` / `heartbeat_baslat()` / `heartbeat_durdur()` | Tek heartbeat gönderir / saniyede bir göndermeye başlar / durdurur |
 | `mod_degistir(mod)` | `"manual"`, `"stabilize"`, `"depthhold"` (ArduSub'da `ALT_HOLD`) |
 | `arm()` / `disarm()` | Motorları arm / disarm eder |
+| `hareket(ileri, yanal, dikey, donus, sure)` | Sanal joystick: eksenler -1..1, `sure` saniye uygular, sonra durur |
+| `ileri_git` / `geri_git` / `saga_kay` / `sola_kay` / `yuksel` / `dal` / `don` | `hareket`'in kısa yolları: `(sure, guc)` |
+| `dur()` | Bütün eksenleri boşa alır |
+| `konum()` | `(enlem, boylam, derinlik_m, yön_derece)` |
 
 Her komut, aracın onayını (`COMMAND_ACK`) ve aracın gerçekten yeni duruma geçtiğini (heartbeat) bekler. Reddedilirse ya da cevap gelmezse `AracHatasi` verir.
+
+Hareket, ArduSub'ın `MANUAL_CONTROL` mesajıyla (joystick'in gönderdiği mesaj) yapılır. Araç bu mesajı sadece `MAV_GCS_SYSID` parametresindeki sistem kimliğinden (varsayılan 255) kabul eder; bu yüzden class varsayılan olarak 255 kimliğiyle bağlanır. Mesaj kesilince araç motorları boşa aldığı için `hareket` süre boyunca saniyede 10 kez gönderir.
 
 ## Çalıştırma
 
@@ -42,8 +48,14 @@ Mod: STABILIZE
 Mod: ALT_HOLD
 Mod: MANUAL
 Arm edildi
+ileri     kuzey -1.6 m, doğu -0.1 m, derinlik 0.1→0.1 m, yön 184→184°
+sağa      kuzey -0.2 m, doğu -1.5 m, derinlik 0.1→0.1 m, yön 184→184°
+dal       kuzey -0.1 m, doğu -0.2 m, derinlik 0.1→1.0 m, yön 184→185°
+sağa dön  kuzey -0.1 m, doğu -0.2 m, derinlik 1.0→0.8 m, yön 185→259°
 Disarm edildi
 ```
+
+(Araç başlangıçta güneye, ~184°'ye bakıyor; bu yüzden "ileri" güneye, "sağa" batıya gider.)
 
 Kod içinden kullanım:
 
@@ -53,6 +65,8 @@ from arac import Arac
 with Arac("udp:127.0.0.1:14551") as arac:
     arac.mod_degistir("depthhold")
     arac.arm()
+    arac.ileri_git(3)        # 3 sn, %50 güç
+    arac.don(2, guc=-0.3)    # 2 sn sola dön
     arac.disarm()
 ```
 

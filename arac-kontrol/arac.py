@@ -34,9 +34,10 @@ class Arac:
     }
 
     def __init__(self, adres: str = "udp:127.0.0.1:14551",
-                 sistem_id: int = 200, heartbeat_hz: float = 1.0):
-        # sistem_id: bizim GCS kimliğimiz. QGC ve MAVProxy 255 kullandığı için
-        # çakışmasın diye farklı bir değer seçildi.
+                 sistem_id: int = 255, heartbeat_hz: float = 1.0):
+        # sistem_id: bizim GCS kimliğimiz. ArduSub joystick (MANUAL_CONTROL)
+        # komutlarını sadece MAV_GCS_SYSID parametresindeki kimlikten (varsayılan
+        # 255) kabul eder; başka bir değerle hareket komutları yok sayılır.
         self.adres = adres
         self.sistem_id = sistem_id
         self.heartbeat_periyot = 1.0 / heartbeat_hz
@@ -187,9 +188,90 @@ class Arac:
             raise AracHatasi("Arm olmadı" if arm else "Disarm olmadı")
         print("Arm edildi" if arm else "Disarm edildi")
 
+    # -------------------------------------------------------------- hareket
+    def kontrol_gonder(self, ileri: float = 0.0, yanal: float = 0.0,
+                       dikey: float = 0.0, donus: float = 0.0) -> None:
+        """Tek bir MANUAL_CONTROL (sanal joystick) mesajı gönderir.
+
+        Değerler -1..1 arası: ileri (+ileri/-geri), yanal (+sağ/-sol),
+        dikey (+yukarı/-aşağı), donus (+saat yönü/-tersi). 0 = boşta.
+        """
+        def olcekle(v: float) -> int:
+            return int(max(-1.0, min(1.0, v)) * 1000)
+
+        with self._gonderme_kilidi:
+            self._b.mav.manual_control_send(
+                self._b.target_system,
+                olcekle(ileri),
+                olcekle(yanal),
+                500 + olcekle(dikey) // 2,  # z: 0..1000, 500 = boşta
+                olcekle(donus),
+                0,  # buton yok
+            )
+
+    def hareket(self, ileri: float = 0.0, yanal: float = 0.0, dikey: float = 0.0,
+                donus: float = 0.0, sure: float = 1.0, hz: float = 10.0) -> None:
+        """Verilen komutu `sure` saniye boyunca uygular, sonra aracı durdurur.
+
+        ArduSub joystick komutu kesilince motorları boşa aldığı için mesaj
+        süre boyunca saniyede `hz` kez tekrar gönderilir. Araç armed olmalı.
+        """
+        if not self.armli_mi:
+            raise AracHatasi("Hareket için önce arm() çağrılmalı")
+        bitis = time.monotonic() + sure
+        while time.monotonic() < bitis:
+            self.kontrol_gonder(ileri, yanal, dikey, donus)
+            self._gelenleri_isle()
+            time.sleep(1.0 / hz)
+        self.dur()
+
+    def _gelenleri_isle(self) -> None:
+        """Bekleyen bütün mesajları okur; araç durumu (mod, arm, konum) güncellenir."""
+        while self._b.recv_match(blocking=False) is not None:
+            pass
+
+    def dur(self) -> None:
+        """Bütün eksenleri boşa alır."""
+        for _ in range(3):
+            self.kontrol_gonder()
+            time.sleep(0.05)
+
+    def ileri_git(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(ileri=guc, sure=sure)
+
+    def geri_git(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(ileri=-guc, sure=sure)
+
+    def saga_kay(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(yanal=guc, sure=sure)
+
+    def sola_kay(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(yanal=-guc, sure=sure)
+
+    def yuksel(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(dikey=guc, sure=sure)
+
+    def dal(self, sure: float, guc: float = 0.5) -> None:
+        self.hareket(dikey=-guc, sure=sure)
+
+    def don(self, sure: float, guc: float = 0.3) -> None:
+        """guc > 0 sağa (saat yönü), guc < 0 sola döner."""
+        self.hareket(donus=guc, sure=sure)
+
+    def konum(self, zaman_asimi: float = 2.0) -> tuple[float, float, float, float]:
+        """(enlem, boylam, derinlik_m, yön_derece) döndürür. Derinlik yüzeyde 0, aşağı +."""
+        self._gelenleri_isle()  # tampondaki eski mesajları at, en günceli kalsın
+        msg = self._b.messages.get("GLOBAL_POSITION_INT")
+        if msg is None:
+            msg = self._b.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=zaman_asimi)
+        if msg is None:
+            raise AracHatasi("Konum bilgisi gelmedi")
+        return msg.lat / 1e7, msg.lon / 1e7, -msg.relative_alt / 1000, msg.hdg / 100
+
 
 if __name__ == "__main__":
     import argparse
+    import math
 
     ap = argparse.ArgumentParser(description="Arac class'ını uçtan uca dener.")
     ap.add_argument("--adres", default="udp:127.0.0.1:14551")
@@ -200,5 +282,21 @@ if __name__ == "__main__":
             arac.mod_degistir(m)
         arac.mod_degistir("manual")
         arac.arm()
-        time.sleep(2)
+
+        hareketler = [
+            ("ileri", lambda: arac.ileri_git(3)),
+            ("sağa", lambda: arac.saga_kay(3)),
+            ("dal", lambda: arac.dal(3)),
+            ("sağa dön", lambda: arac.don(3)),
+        ]
+        for ad, hareket in hareketler:
+            once = arac.konum()
+            hareket()
+            time.sleep(1)  # aracın biraz yavaşlaması için
+            sonra = arac.konum()
+            kuzey = (sonra[0] - once[0]) * 111_320
+            dogu = (sonra[1] - once[1]) * 111_320 * math.cos(math.radians(once[0]))
+            print(f"{ad:9s} kuzey {kuzey:+.1f} m, doğu {dogu:+.1f} m, "
+                  f"derinlik {once[2]:.1f}→{sonra[2]:.1f} m, yön {once[3]:.0f}→{sonra[3]:.0f}°")
+
         arac.disarm()
