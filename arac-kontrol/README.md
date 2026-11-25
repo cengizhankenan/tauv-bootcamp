@@ -11,6 +11,7 @@ ArduSub aracını MAVLink (pymavlink) üzerinden süren `Arac` class'ı: [arac.p
 | `hareket(ileri, yanal, dikey, donus, sure)` | Sanal joystick: eksenler -1..1, `sure` saniye uygular, sonra durur |
 | `ileri_git` / `geri_git` / `saga_kay` / `sola_kay` / `yuksel` / `dal` / `don` | `hareket`'in kısa yolları: `(sure, guc)` |
 | `dur()` | Bütün eksenleri boşa alır |
+| `guncelle()` | Bekleyen mesajları okuyup durumu (mod, arm, konum) günceller |
 | `konum()` | `(enlem, boylam, derinlik_m, yön_derece)` |
 
 Her komut, aracın onayını (`COMMAND_ACK`) ve aracın gerçekten yeni duruma geçtiğini (heartbeat) bekler. Reddedilirse ya da cevap gelmezse `AracHatasi` verir.
@@ -56,6 +57,22 @@ Disarm edildi
 ```
 
 (Araç başlangıçta güneye, ~184°'ye bakıyor; bu yüzden "ileri" güneye, "sağa" batıya gider.)
+
+## Klavyeyle sürmek (WASD)
+
+```bash
+python3 klavye.py
+```
+
+| Tuş | Hareket | Tuş | Hareket |
+|---|---|---|---|
+| W / S | ileri / geri | Q / E | sola / sağa dön |
+| A / D | sola / sağa kay | R / F | yüksel / dal |
+| boşluk | dur | + / - | gücü artır / azalt |
+| M | arm / disarm | 1 / 2 / 3 | MANUAL / STABILIZE / DEPTH HOLD |
+| X | çıkış (araç disarm edilir) | | |
+
+Alt satırda mod, arm durumu, güç, derinlik ve yön canlı görünür. Terminal tuşun bırakıldığını bildirmediği için hareket, tuş basılı tutulup tekrar ettikçe sürer ve bırakınca kısa süre sonra durur. Aynı anda tek hareket tuşu çalışır.
 
 Kod içinden kullanım:
 

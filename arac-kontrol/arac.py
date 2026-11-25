@@ -221,11 +221,11 @@ class Arac:
         bitis = time.monotonic() + sure
         while time.monotonic() < bitis:
             self.kontrol_gonder(ileri, yanal, dikey, donus)
-            self._gelenleri_isle()
+            self.guncelle()
             time.sleep(1.0 / hz)
         self.dur()
 
-    def _gelenleri_isle(self) -> None:
+    def guncelle(self) -> None:
         """Bekleyen bütün mesajları okur; araç durumu (mod, arm, konum) güncellenir."""
         while self._b.recv_match(blocking=False) is not None:
             pass
@@ -260,7 +260,7 @@ class Arac:
 
     def konum(self, zaman_asimi: float = 2.0) -> tuple[float, float, float, float]:
         """(enlem, boylam, derinlik_m, yön_derece) döndürür. Derinlik yüzeyde 0, aşağı +."""
-        self._gelenleri_isle()  # tampondaki eski mesajları at, en günceli kalsın
+        self.guncelle()  # tampondaki eski mesajları at, en günceli kalsın
         msg = self._b.messages.get("GLOBAL_POSITION_INT")
         if msg is None:
             msg = self._b.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=zaman_asimi)
